@@ -17,8 +17,15 @@ use SMW\SQLStore\SQLStore;
 class Utils {
 
 	public static function setGlobalJSVariables( &$vars ) {
-		global $wgScriptPath;
-		$sdSkinsPath = "$wgScriptPath/extensions/SemanticDrilldown/skins";
+		/*
+		 * Fandom change - start
+		 * Use correct ext path to make it work in our dockerized setup
+		 */
+		global $wgExtensionAssetsPath;
+		$sdSkinsPath = "$wgExtensionAssetsPath/SemanticDrilldown/skins";
+		/*
+		 * Fandom change - end
+		 */
 
 		$vars['sdgDownArrowImage'] = "$sdSkinsPath/down-arrow.png";
 		$vars['sdgRightArrowImage'] = "$sdSkinsPath/right-arrow.png";
