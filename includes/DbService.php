@@ -6,18 +6,23 @@ use SD\Sql\PropertyTypeDbInfo;
 use SD\Sql\SqlProvider;
 use Wikimedia\Rdbms\DBConnRef;
 use Wikimedia\Rdbms\IResultWrapper;
+use const DB_PRIMARY;
+use const DB_REPLICA;
 
 class DbService {
 
 	private DBConnRef $dbw;
 	private DBConnRef $dbr;
 	private DBConnRef $smwDbr;
+	private DBConnRef $dbrQueryEngine;
 
 	public function __construct( ?DBConnRef $dbw, ?DBConnRef $dbr ) {
 		$this->dbw = $dbw;
 		$this->dbr = $dbr;
 		// Fandom change - obtain a connection to the external SMW cluster
 		$this->smwDbr = smwfGetStore()->getConnection( DB_REPLICA );
+		// PLATFORM-9138
+		$this->dbrQueryEngine = smwfGetStore()->getConnection( 'mw.db.queryengine' );
 	}
 
 	/**
@@ -36,7 +41,7 @@ class DbService {
 	 * all remaining filters
 	 */
 	public function createTempTable( $category, $subcategory, $subcategories, $applied_filters ) {
-		$temporaryTableManager = new TemporaryTableManager( $this->smwDbr );
+		$temporaryTableManager = new TemporaryTableManager( $this->dbrQueryEngine );
 
 		$sql0 = "DROP TABLE IF EXISTS semantic_drilldown_values;";
 		$temporaryTableManager->queryWithAutoCommit( $sql0, __METHOD__ );
@@ -109,7 +114,7 @@ END;
 		} else {
 			$sql .= SqlProvider::getSQLFromClauseForCategory( $subcategory, $subcategories );
 		}
-		$res = $this->query( $sql );
+		$res = $this->dbrQueryEngine->query( $sql );
 		$row = $res->fetchRow();
 		return $row[0];
 	}

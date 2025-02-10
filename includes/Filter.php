@@ -246,7 +246,7 @@ END;
 		$possible_values = [];
 		$property_value = $this->escapedProperty();
 		// Fandom change - use external SMW DB connection. $dbw is used as a name to reduce the diff size
-		$dbw = $this->store->getConnection( DB_REPLICA );
+		$dbw = $this->store->getConnection( 'mw.db.queryengine' );
 		$wikiDbr = MediaWikiServices::getInstance()
 			->getDBLoadBalancer()
 			->getMaintenanceConnectionRef( DB_REPLICA );
