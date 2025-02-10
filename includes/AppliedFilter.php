@@ -6,6 +6,7 @@ use MediaWiki\MediaWikiServices;
 use RequestContext;
 use SD\Sql\PropertyTypeDbInfo;
 use SD\Sql\SqlProvider;
+use SMWStore;
 
 /**
  * Defines a class, AppliedFilter, that adds a value or a value range
@@ -58,6 +59,19 @@ class AppliedFilter {
 	 * @var string
 	 */
 	public $upper_date_string;
+
+	/*
+	 * Fandom change - start
+	 * SMWStore is required to access the SMW DB in an external cluster
+	 */
+	private SMWStore $store;
+
+	public function __construct() {
+		$this->store = smwfGetStore();
+	}
+	/*
+	 * Fandom change - end
+	 */
 
 	public static function create( Filter $filter, $values, $search_terms = null, $lower_date = null, $upper_date = null ) {
 		$af = new AppliedFilter();
@@ -152,9 +166,11 @@ class AppliedFilter {
 		}
 
 		$sql = "(";
-		$dbr = MediaWikiServices::getInstance()
-			->getDBLoadBalancer()
-			->getMaintenanceConnectionRef( DB_REPLICA );
+		/*
+		 * Fandom change
+		 * Use SMW Store to get a connection to SMW DB (external cluster compatibility)
+		 */
+		$dbr = $this->store->getConnection( DB_REPLICA );
 		if ( $this->search_terms != null ) {
 			$quoteReplace = ( $wgDBtype == 'postgres' ? "''" : "\'" );
 			foreach ( $this->search_terms as $i => $search_term ) {
@@ -214,7 +230,7 @@ class AppliedFilter {
 			} elseif ( $this->filter->propertyType() == 'date' ) {
 				// check if the array can be used instead of list
 				// [ $yearValue, $monthValue, $dayValue ] = SqlProvider::getDateFunctions( $value_field );
-				list( $yearValue, $monthValue, $dayValue ) = SqlProvider::getDateFunctions( $value_field );
+				[ $yearValue, $monthValue, $dayValue ] = SqlProvider::getDateFunctions( $value_field );
 				if ( $fv->time_period == 'day' ) {
 					$sql .= "$yearValue = {$fv->year} AND $monthValue = {$fv->month} AND $dayValue = {$fv->day} ";
 				} elseif ( $fv->time_period == 'month' ) {
@@ -246,12 +262,17 @@ class AppliedFilter {
 		$possible_values = [];
 
 		$lb = MediaWikiServices::getInstance()->getDBLoadBalancer();
-		$dbr = $lb->getConnection( $lb::DB_REPLICA );
+		/*
+		 * Fandom change
+		 * Use SMW Store to get a connection to SMW DB (external cluster compatibility)
+		 */
+		$dbr = $this->store->getConnection( DB_REPLICA );
+		$wikiDbr = $lb->getConnection( $lb::DB_REPLICA );
 
 		$property_value = $dbr->addQuotes( $this->filter->escapedProperty() );
 		$property_table_name = $dbr->tableName( PropertyTypeDbInfo::tableName( $this->filter->propertyType() ) );
-		$revision_table_name = $dbr->tableName( 'revision' );
-		$page_props_table_name = $dbr->tableName( 'page_props' );
+		$revision_table_name = $wikiDbr->tableName( 'revision' );
+		$page_props_table_name = $wikiDbr->tableName( 'page_props' );
 		$category = $dbr->addQuotes( $category );
 
 		if ( $this->filter->propertyType() != 'date' ) {
@@ -275,19 +296,24 @@ class AppliedFilter {
 		$cat_ns = NS_CATEGORY;
 
 		// Construct SQL query
-		$sql = "SELECT $value_field AS value, $displaytitle AS displayTitle
+		// Fandom change - select p.o_id to fetch page titles later
+		$sql = "SELECT $value_field AS value, p.o_id AS o_id
 				FROM $property_table_name p
 				JOIN $smw_ids p_ids ON p.p_id = p_ids.smw_id\n";
-
+		/*
+		 * Fandom change - don't attempt to JOIN SMW data with wiki tables, as they are located in separate clusters
+		 */
+		/*
 		if ( $this->filter->propertyType() === 'page' ) {
+
 			$sql .= <<<SQL
 				JOIN $smw_ids o_ids ON p.o_id = o_ids.smw_id
 				LEFT JOIN $revision_table_name ON $revision_table_name.rev_id = o_ids.smw_rev
-				LEFT JOIN $page_props_table_name displaytitle ON $revision_table_name.rev_page = displaytitle.pp_page 
+				LEFT JOIN $page_props_table_name displaytitle ON $revision_table_name.rev_page = displaytitle.pp_page
 					AND displaytitle.pp_propname = 'displaytitle'
 				SQL;
 		}
-
+		*/
 		$sql .= <<<SQL
 				JOIN $smwCategoryInstances insts ON p.s_id = insts.s_id
 				JOIN $smw_ids cat_ids ON insts.o_id = cat_ids.smw_id
@@ -300,8 +326,40 @@ class AppliedFilter {
 
 		// Execute query
 		$res = $dbr->query( $sql, __METHOD__ );
-
+		/*
+		 * Fandom change - start
+		 * Fetch page titles in a separate query to avoid JOINing SMW data with wiki tables
+		 */
+		$rows = [];
 		while ( $row = $res->fetchRow() ) {
+			$rows[] = $row;
+		}
+		$o_ids_to_displaytitle = [];
+		if ( $this->filter->propertyType() === 'page' ) {
+			$o_ids = array_column( $rows, 'o_id' );
+			$titlesRows = $wikiDbr->newSelectQueryBuilder()
+				->field( 'revision.rev_id', 'rev_id' )
+				->field('displaytitle.pp_value', 'displayTitle' )
+				->from( $revision_table_name )
+				->leftJoin(
+					$page_props_table_name,
+					'displaytitle',
+					[
+						'revision.rev_page = displaytitle.pp_page',
+						'displaytitle.pp_propname = "displaytitle"'
+					]
+				)
+				->where( [ 'revision.rev_id' => $o_ids ] )
+				->caller( __METHOD__ )
+				->fetchResultSet();
+			foreach ( $titlesRows as $titlesRow ) {
+				$o_ids_to_displaytitle[$titlesRow->rev_id] = $titlesRow->displayTitle;
+			}
+		}
+		foreach ( $rows as $row ) {
+			/*
+			 * Fandom change - end
+			 */
 			if ( $this->filter->propertyType() == 'date' && $this->filter->timePeriod() == 'month' ) {
 				$value_string = Utils::monthToString( $row[1] ) . " " . $row['value'];
 			} else {
@@ -311,7 +369,8 @@ class AppliedFilter {
 			$possible_values[] = new PossibleFilterValue(
 				$value_string,
 				null,
-				htmlspecialchars_decode( $row['displayTitle'] ?? '' )
+				// Fandom change - fetch displayTitle from the array instead
+				htmlspecialchars_decode( $o_ids_to_displaytitle[$row['o_id']] ?? '' )
 			);
 		}
 		return new PossibleFilterValues( $possible_values );

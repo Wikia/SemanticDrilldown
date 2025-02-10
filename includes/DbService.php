@@ -11,10 +11,13 @@ class DbService {
 
 	private DBConnRef $dbw;
 	private DBConnRef $dbr;
+	private DBConnRef $smwDbr;
 
 	public function __construct( ?DBConnRef $dbw, ?DBConnRef $dbr ) {
 		$this->dbw = $dbw;
 		$this->dbr = $dbr;
+		// Fandom change - obtain a connection to the external SMW cluster
+		$this->smwDbr = smwfGetStore()->getConnection( DB_REPLICA );
 	}
 
 	/**
@@ -33,12 +36,13 @@ class DbService {
 	 * all remaining filters
 	 */
 	public function createTempTable( $category, $subcategory, $subcategories, $applied_filters ) {
-		$temporaryTableManager = new TemporaryTableManager( $this->dbw );
+		$temporaryTableManager = new TemporaryTableManager( $this->smwDbr );
 
 		$sql0 = "DROP TABLE IF EXISTS semantic_drilldown_values;";
 		$temporaryTableManager->queryWithAutoCommit( $sql0, __METHOD__ );
 
-		$sql1 = "CREATE TEMPORARY TABLE semantic_drilldown_values ( id INT NOT NULL )";
+		// Fandom change - add extra index to the temporary table
+		$sql1 = "CREATE TEMPORARY TABLE semantic_drilldown_values ( id INT NOT NULL, INDEX id_index ( id ) )";
 		$temporaryTableManager->queryWithAutoCommit( $sql1, __METHOD__ );
 
 		$sql2 = "CREATE INDEX id_index ON semantic_drilldown_values ( id )";
@@ -57,9 +61,9 @@ class DbService {
 	 * and for getting the set of 'None' values.
 	 */
 	public function createFilterValuesTempTable( $propertyType, $escaped_property ) {
-		$smw_ids = $this->dbr->tableName( Utils::getIDsTableName() );
+		$smw_ids = $this->smwDbr->tableName( Utils::getIDsTableName() );
 
-		$valuesTable = $this->dbr->tableName( PropertyTypeDbInfo::tableName( $propertyType ) );
+		$valuesTable = $this->smwDbr->tableName( PropertyTypeDbInfo::tableName( $propertyType ) );
 		$value_field = PropertyTypeDbInfo::valueField( $propertyType );
 
 		$query_property = $escaped_property;
@@ -76,7 +80,7 @@ END;
 		}
 		$sql .= "	WHERE p_ids.smw_title = '$query_property'";
 
-		$temporaryTableManager = new TemporaryTableManager( $this->dbw );
+		$temporaryTableManager = new TemporaryTableManager( $this->smwDbr );
 		$temporaryTableManager->queryWithAutoCommit( $sql, __METHOD__ );
 	}
 
@@ -88,7 +92,7 @@ END;
 		// not supported on all RDBMS's.
 		$sql = "DROP TABLE semantic_drilldown_filter_values";
 
-		$temporaryTableManager = new TemporaryTableManager( $this->dbw );
+		$temporaryTableManager = new TemporaryTableManager( $this->smwDbr );
 		$temporaryTableManager->queryWithAutoCommit( $sql, __METHOD__ );
 	}
 

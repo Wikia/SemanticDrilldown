@@ -48,9 +48,8 @@ class SqlProvider {
 	 * @return string
 	 */
 	public static function getSQLFromClauseForCategory( $subcategory, $child_subcategories ) {
-		$dbr = MediaWikiServices::getInstance()
-			->getDBLoadBalancer()
-			->getMaintenanceConnectionRef( DB_REPLICA );
+		// Fandom change - use connection to external SMW cluster
+		$dbr = smwfGetStore()->getConnection( DB_REPLICA );
 		$smwIDs = $dbr->tableName( Utils::getIDsTableName() );
 		$smwCategoryInstances = $dbr->tableName( Utils::getCategoryInstancesTableName() );
 		$ns_cat = NS_CATEGORY;
@@ -81,9 +80,8 @@ class SqlProvider {
 	 * @return string
 	 */
 	public static function getSQLFromClause( string $category, string $subcategory, array $subcategories, array $applied_filters ) {
-		$dbr = MediaWikiServices::getInstance()
-			->getDBLoadBalancer()
-			->getMaintenanceConnectionRef( DB_REPLICA );
+		// Fandom change - use connection to external SMW cluster
+		$dbr = smwfGetStore()->getConnection( DB_REPLICA );
 		$smwIDs = $dbr->tableName( Utils::getIDsTableName() );
 		$smwCategoryInstances = $dbr->tableName( Utils::getCategoryInstancesTableName() );
 		$cat_ns = NS_CATEGORY;
