@@ -7,6 +7,7 @@ use SD\Sql\PropertyTypeDbInfo;
 use SD\Sql\SqlProvider;
 use SMW\DIProperty;
 use SMW\DIWikiPage;
+use SMW\Store;
 use SMWDIUri;
 
 /**
@@ -24,6 +25,11 @@ class Filter {
 	private ?string $int;
 	private ?string $timePeriod;
 	private $allowedValues;
+	/*
+	 * Fandom change - start
+	 * SMWStore is required to access the SMW DB in an external cluster
+	 */
+	private Store $store;
 
 	/**
 	 * possible applied filters value
@@ -50,6 +56,9 @@ class Filter {
 			$this->allowedValues =
 				$db->getCategoryChildren( $category, false, 5 );
 		}
+
+		// Fandom change
+		$this->store = smwfGetStore();
 	}
 
 	public function name() {
@@ -107,10 +116,9 @@ class Filter {
 		$possible_dates = [];
 		$property_value = $this->escapedProperty();
 		$date_field = PropertyTypeDbInfo::dateField( $this->propertyType() );
-		$dbw = MediaWikiServices::getInstance()
-				->getDBLoadBalancer()
-				->getMaintenanceConnectionRef( DB_PRIMARY );
-		list( $yearValue, $monthValue, $dayValue ) = SqlProvider::getDateFunctions( $date_field );
+		// Fandom change - use external SMW DB connection. $dbw is used as a name to reduce the diff size
+		$dbw = $this->store->getConnection( DB_REPLICA );
+		[ $yearValue, $monthValue, $dayValue ] = SqlProvider::getDateFunctions( $date_field );
 		$fields = "$yearValue, $monthValue, $dayValue";
 		$datesTable = $dbw->tableName( PropertyTypeDbInfo::tableName( $this->propertyType() ) );
 		$idsTable = $dbw->tableName( Utils::getIDsTableName() );
@@ -238,22 +246,27 @@ END;
 	public function getAllValues(): PossibleFilterValues {
 		$possible_values = [];
 		$property_value = $this->escapedProperty();
-		$dbw = MediaWikiServices::getInstance()
-				->getDBLoadBalancer()
-				->getMaintenanceConnectionRef( DB_PRIMARY );
+		// Fandom change - use external SMW DB connection. $dbw is used as a name to reduce the diff size
+		$dbw = $this->store->getConnection( DB_REPLICA );
+		$wikiDbr = MediaWikiServices::getInstance()
+			->getDBLoadBalancer()
+			->getMaintenanceConnectionRef( DB_REPLICA );
 		$property_table_name = $dbw->tableName( PropertyTypeDbInfo::tableName( $this->propertyType() ) );
-		$revision_table_name = $dbw->tableName( 'revision' );
-		$page_props_table_name = $dbw->tableName( 'page_props' );
+		$revision_table_name = $wikiDbr->tableName( 'revision' );
+		$page_props_table_name = $wikiDbr->tableName( 'page_props' );
 		$value_field = PropertyTypeDbInfo::valueField( $this->propertyType() );
 		$displaytitle = $this->propertyType === 'page' ? 'displaytitle.pp_value' : 'null';
 		$smw_ids = $dbw->tableName( Utils::getIDsTableName() );
 		$prop_ns = SMW_NS_PROPERTY;
 		$tableName = $dbw->tableName( "semantic_drilldown_values" );
+		// Fandom change - don't use cross-cluster JOIN, return o_id to use in another query
 		$sql = <<<END
-	SELECT $value_field as value, $displaytitle as displayTitle, count(DISTINCT sdv.id) as count 
-	FROM $tableName sdv
+	SELECT $value_field as value, count(DISTINCT sdv.id) as count, p.o_id as o_id
+	FROM $tableName
 	JOIN $property_table_name p ON sdv.id = p.s_id
 END;
+		// Fandom change - start - don't use cross-cluster JOIN
+		/*
 		if ( $this->propertyType === 'page' ) {
 			$sql .= <<<END
 	JOIN $smw_ids o_ids ON p.o_id = o_ids.smw_id
@@ -261,6 +274,7 @@ END;
 	LEFT JOIN $page_props_table_name displaytitle ON $revision_table_name.rev_page = displaytitle.pp_page AND displaytitle.pp_propname = 'displaytitle'
 END;
 		}
+		*/
 		$sql .= <<<END
 	JOIN $smw_ids p_ids ON p.p_id = p_ids.smw_id
 	WHERE p_ids.smw_title = '$property_value'
@@ -270,23 +284,60 @@ END;
 
 END;
 		$res = $dbw->query( $sql );
+		/*
+		 * Fandom change - start
+		 * Fetch page titles in a separate query to avoid JOINing SMW data with wiki tables
+		 */
+		$rows = [];
 		while ( $row = $res->fetchRow() ) {
+			$rows[] = $row;
+		}
+		$o_ids_to_displaytitle = [];
+		if ( $this->propertyType === 'page' ) {
+			$o_ids = array_column( $rows, 'o_id' );
+			$titlesRows = $wikiDbr->newSelectQueryBuilder()
+				->field( 'revision.rev_id', 'rev_id' )
+				->field('displaytitle.pp_value', 'displayTitle' )
+				->from( $revision_table_name )
+				->leftJoin(
+					$page_props_table_name,
+					'displaytitle',
+					[
+						'revision.rev_page = displaytitle.pp_page',
+						'displaytitle.pp_propname = "displaytitle"'
+					]
+				)
+				->where( [ 'revision.rev_id' => $o_ids ] )
+				->caller( __METHOD__ )
+				->fetchResultSet();
+			foreach ( $titlesRows as $titlesRow ) {
+				$o_ids_to_displaytitle[$titlesRow->rev_id] = $titlesRow->displayTitle;
+			}
+		}
+		foreach ( $rows as $row ) {
+			/*
+			 * Fandom change - end
+			 */
 			$value_string = str_replace( '_', ' ', $row['value'] );
 			// We check this here, and not in the SQL, because
 			// for MySQL, 0 sometimes equals blank.
 			if ( $value_string === '' ) {
 				continue;
 			}
-			$possible_values[] = new PossibleFilterValue( $value_string, $row['count'], htmlspecialchars_decode( $row['displayTitle'] ?? '' ) );
+			// Fandom change - fetch displayTitle from the array instead
+			$possible_values[] = new PossibleFilterValue(
+				$value_string,
+				$row['count'],
+				htmlspecialchars_decode( $o_ids_to_displaytitle[$row['o_id']] ?? '' )
+			);
 		}
 
 		return new PossibleFilterValues( $possible_values );
 	}
 
 	private function getTimePeriod() {
-		$dbw = MediaWikiServices::getInstance()
-				->getDBLoadBalancer()
-				->getMaintenanceConnectionRef( DB_PRIMARY );
+		// Fandom change - use external SMW DB connection. $dbw is used as a name to reduce the diff size
+		$dbw = $this->store->getConnection( DB_REPLICA );
 		$property_value = $this->escapedProperty();
 		$date_field = PropertyTypeDbInfo::dateField( $this->propertyType() );
 		$datesTable = $dbw->tableName( PropertyTypeDbInfo::tableName( $this->propertyType() ) );
@@ -311,7 +362,7 @@ END;
 		if ( count( $minDateParts ) == 3 ) {
 			// check if array can be used instead of list
 			// [ $minYear, $minMonth, $minDay ] = $minDateParts;
-			list( $minYear, $minMonth, $minDay ) = $minDateParts;
+			[ $minYear, $minMonth, $minDay ] = $minDateParts;
 		} else {
 			$minYear = $minDateParts[0];
 			$minMonth = $minDay = 0;
@@ -322,7 +373,7 @@ END;
 		if ( count( $maxDateParts ) == 3 ) {
 			// check if array can be used instead of list
 			// [ $maxYear, $maxMonth, $maxDay ] = $maxDateParts;
-			list( $maxYear, $maxMonth, $maxDay ) = $maxDateParts;
+			[ $maxYear, $maxMonth, $maxDay ] = $maxDateParts;
 		} else {
 			$maxYear = $maxDateParts[0];
 			$maxMonth = $maxDay = 0;
