@@ -4,17 +4,16 @@ namespace SD;
 
 use SD\Sql\PropertyTypeDbInfo;
 use SD\Sql\SqlProvider;
+use SMW\MediaWiki\Connection\Database;
 use Wikimedia\Rdbms\DBConnRef;
 use Wikimedia\Rdbms\IResultWrapper;
-use const DB_PRIMARY;
-use const DB_REPLICA;
 
 class DbService {
 
 	private ?DBConnRef $dbw;
 	private ?DBConnRef $dbr;
 	private ?DBConnRef $smwDbr;
-	private ?DBConnRef $dbrQueryEngine;
+	private Database $dbrQueryEngine;
 
 	public function __construct( ?DBConnRef $dbw, ?DBConnRef $dbr ) {
 		$this->dbw = $dbw;
@@ -32,7 +31,7 @@ class DbService {
 	 * @return bool|IResultWrapper
 	 */
 	public function query( string $sql ) {
-		return $this->dbr->query( $sql );
+		return $this->dbrQueryEngine->query( $sql );
 	}
 
 	/**
@@ -44,15 +43,17 @@ class DbService {
 		$temporaryTableManager = new TemporaryTableManager( $this->dbrQueryEngine );
 
 		$tableName = $this->dbr->tableName( "semantic_drilldown_values" );
-		$sql0 = "DROP TABLE IF EXISTS $tableName;";
-		$temporaryTableManager->queryWithAutoCommit( $sql0, __METHOD__ );
+		// Fandom change - no need to drop temporary tables
+		// $sql0 = "DROP TABLE IF EXISTS $tableName;";
+		// $temporaryTableManager->queryWithAutoCommit( $sql0, __METHOD__ );
 
 		// Fandom change - add extra index to the temporary table
 		$sql1 = "CREATE TEMPORARY TABLE $tableName ( id INT NOT NULL, INDEX id_index ( id ) )";
 		$temporaryTableManager->queryWithAutoCommit( $sql1, __METHOD__ );
 
-		$sql2 = "CREATE INDEX id_index ON $tableName ( id )";
-		$temporaryTableManager->queryWithAutoCommit( $sql2, __METHOD__ );
+		// Fandom change - index is created with the query above
+		// $sql2 = "CREATE INDEX id_index ON $tableName ( id )";
+		// $temporaryTableManager->queryWithAutoCommit( $sql2, __METHOD__ );
 
 		$sql3 = "INSERT INTO $tableName SELECT ids.smw_id AS id\n";
 		$sql3 .= SqlProvider::getSQLFromClause( $category, $subcategory, $subcategories, $applied_filters );
@@ -87,7 +88,7 @@ END;
 		}
 		$sql .= "	WHERE p_ids.smw_title = '$query_property'";
 
-		$temporaryTableManager = new TemporaryTableManager( $this->smwDbr );
+		$temporaryTableManager = new TemporaryTableManager( $this->dbrQueryEngine );
 		$temporaryTableManager->queryWithAutoCommit( $sql, __METHOD__ );
 	}
 
