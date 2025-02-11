@@ -170,7 +170,7 @@ class AppliedFilter {
 		 * Fandom change
 		 * Use SMW Store to get a connection to SMW DB (external cluster compatibility)
 		 */
-		$dbr = $this->store->getConnection( DB_REPLICA );
+		$dbr = $this->store->getConnection( 'mw.db' );
 		if ( $this->search_terms != null ) {
 			$quoteReplace = ( $wgDBtype == 'postgres' ? "''" : "\'" );
 			foreach ( $this->search_terms as $i => $search_term ) {
@@ -266,7 +266,7 @@ class AppliedFilter {
 		 * Fandom change
 		 * Use SMW Store to get a connection to SMW DB (external cluster compatibility)
 		 */
-		$dbr = $this->store->getConnection( DB_REPLICA );
+		$dbr = $this->store->getConnection( 'mw.db' );
 		$wikiDbr = $lb->getConnection( $lb::DB_REPLICA );
 
 		$property_value = $dbr->addQuotes( $this->filter->escapedProperty() );
@@ -300,20 +300,24 @@ class AppliedFilter {
 		$sql = "SELECT $value_field AS value, p.o_id AS o_id
 				FROM $property_table_name p
 				JOIN $smw_ids p_ids ON p.p_id = p_ids.smw_id\n";
-		/*
-		 * Fandom change - don't attempt to JOIN SMW data with wiki tables, as they are located in separate clusters
-		 */
-		/*
 		if ( $this->filter->propertyType() === 'page' ) {
 
-			$sql .= <<<SQL
-				JOIN $smw_ids o_ids ON p.o_id = o_ids.smw_id
-				LEFT JOIN $revision_table_name ON $revision_table_name.rev_id = o_ids.smw_rev
-				LEFT JOIN $page_props_table_name displaytitle ON $revision_table_name.rev_page = displaytitle.pp_page
-					AND displaytitle.pp_propname = 'displaytitle'
-				SQL;
-		}
-		*/
+			/*
+			 * Fandom change - don't attempt to JOIN SMW data with wiki tables, as they are located in separate clusters
+			 */
+			/*
+				$sql .= <<<SQL
+					JOIN $smw_ids o_ids ON p.o_id = o_ids.smw_id
+					LEFT JOIN $revision_table_name ON $revision_table_name.rev_id = o_ids.smw_rev
+					LEFT JOIN $page_props_table_name displaytitle ON $revision_table_name.rev_page = displaytitle.pp_page
+						AND displaytitle.pp_propname = 'displaytitle'
+					SQL;
+
+			*/
+				$sql .= <<<SQL
+					JOIN $smw_ids o_ids ON p.o_id = o_ids.smw_id
+					SQL;
+			}
 		$sql .= <<<SQL
 				JOIN $smwCategoryInstances insts ON p.s_id = insts.s_id
 				JOIN $smw_ids cat_ids ON insts.o_id = cat_ids.smw_id
@@ -335,7 +339,7 @@ class AppliedFilter {
 			$rows[] = $row;
 		}
 		$o_ids_to_displaytitle = [];
-		if ( $this->filter->propertyType() === 'page' ) {
+		if ( $this->filter->propertyType() === 'page' && !empty( $rows ) ) {
 			$o_ids = array_column( $rows, 'o_id' );
 			$titlesRows = $wikiDbr->newSelectQueryBuilder()
 				->field( 'revision.rev_id', 'rev_id' )

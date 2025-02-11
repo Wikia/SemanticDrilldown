@@ -263,16 +263,20 @@ END;
 	FROM semantic_drilldown_values sdv
 	JOIN $property_table_name p ON sdv.id = p.s_id
 END;
-		// Fandom change - start - don't use cross-cluster JOIN
-		/*
+
 		if ( $this->propertyType === 'page' ) {
+			// Fandom change - start - don't use cross-cluster JOIN
+			/*
+				$sql .= <<<END
+		JOIN $smw_ids o_ids ON p.o_id = o_ids.smw_id
+		LEFT JOIN $revision_table_name ON $revision_table_name.rev_id = o_ids.smw_rev
+		LEFT JOIN $page_props_table_name displaytitle ON $revision_table_name.rev_page = displaytitle.pp_page AND displaytitle.pp_propname = 'displaytitle'
+	END;
+			*/
 			$sql .= <<<END
-	JOIN $smw_ids o_ids ON p.o_id = o_ids.smw_id
-	LEFT JOIN $revision_table_name ON $revision_table_name.rev_id = o_ids.smw_rev
-	LEFT JOIN $page_props_table_name displaytitle ON $revision_table_name.rev_page = displaytitle.pp_page AND displaytitle.pp_propname = 'displaytitle'
-END;
-		}
-		*/
+		JOIN $smw_ids o_ids ON p.o_id = o_ids.smw_id
+	END;
+			}
 		$sql .= <<<END
 	JOIN $smw_ids p_ids ON p.p_id = p_ids.smw_id
 	WHERE p_ids.smw_title = '$property_value'
@@ -291,7 +295,7 @@ END;
 			$rows[] = $row;
 		}
 		$o_ids_to_displaytitle = [];
-		if ( $this->propertyType === 'page' ) {
+		if ( $this->propertyType === 'page' && !empty( $rows ) ) {
 			$o_ids = array_column( $rows, 'o_id' );
 			$titlesRows = $wikiDbr->newSelectQueryBuilder()
 				->field( 'revision.rev_id', 'rev_id' )
