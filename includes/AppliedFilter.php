@@ -297,8 +297,11 @@ class AppliedFilter {
 
 		// Construct SQL query
 		// Fandom change - select p.o_id to fetch page titles later
-		$sql = "SELECT $value_field AS value, p.o_id AS o_id
-				FROM $property_table_name p
+		$sql = "SELECT $value_field AS value";
+		if ( $this->filter->propertyType() === 'page' ) {
+			$sql .= ",p.o_id AS o_id";
+		}
+		$sql .= "FROM $property_table_name p
 				JOIN $smw_ids p_ids ON p.p_id = p_ids.smw_id\n";
 		if ( $this->filter->propertyType() === 'page' ) {
 
