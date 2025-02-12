@@ -119,9 +119,9 @@ class GetApplicableFilters {
 	 * the "results" (values) for this filter has been created.
 	 */
 	private function getFilterLine( $filterName, $isApplied, $isNormalFilter, $resultsLine, Filter $filter ): string {
-		global $wgScriptPath;
-		global $sdgDisableFilterCollapsible;
-		$sdSkinsPath = "$wgScriptPath/extensions/SemanticDrilldown/skins";
+		global $wgExtensionAssetsPath;
+		global $wgSdgDisableFilterCollapsible;
+		$sdSkinsPath = "$wgExtensionAssetsPath/SemanticDrilldown/skins";
 
 		if ( $filter->int() !== null ) {
 			$filterName = wfMessage( $filter->int() )->text();
@@ -135,7 +135,7 @@ class GetApplicableFilters {
 			$additionalClasses .= ' is-normal-filter';
 		}
 
-		if ( $sdgDisableFilterCollapsible ) {
+		if ( $wgSdgDisableFilterCollapsible ) {
 			$text  = '<div class="drilldown-filter' . $additionalClasses . '">';
 			$text .= "	<div class='drilldown-filter-label'>$filterName</div>";
 			$text .= '	<div class="drilldown-filter-values">' . $resultsLine . '</div>';
