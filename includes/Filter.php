@@ -259,7 +259,12 @@ END;
 		$prop_ns = SMW_NS_PROPERTY;
 		// Fandom change - don't use cross-cluster JOIN, return o_id to use in another query
 		$sql = <<<END
-	SELECT $value_field as value, count(DISTINCT sdv.id) as count, p.o_id as o_id
+	SELECT $value_field as value, count(DISTINCT sdv.id) as count
+END;
+		if ( $this->propertyType === 'page' ) {
+			$sql .= ", p.o_id as o_id";
+		}
+		$sql .= <<<END
 	FROM semantic_drilldown_values sdv
 	JOIN $property_table_name p ON sdv.id = p.s_id
 END;
