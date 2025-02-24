@@ -170,7 +170,7 @@ class AppliedFilter {
 		 * Fandom change
 		 * Use SMW Store to get a connection to SMW DB (external cluster compatibility)
 		 */
-		$dbr = $this->store->getConnection( 'mw.db' );
+		$dbr = $this->store->getConnection( DB_REPLICA );
 		if ( $this->search_terms != null ) {
 			$quoteReplace = ( $wgDBtype == 'postgres' ? "''" : "\'" );
 			foreach ( $this->search_terms as $i => $search_term ) {
@@ -266,7 +266,7 @@ class AppliedFilter {
 		 * Fandom change
 		 * Use SMW Store to get a connection to SMW DB (external cluster compatibility)
 		 */
-		$dbr = $this->store->getConnection( 'mw.db' );
+		$dbr = $this->store->getConnection( DB_REPLICA );
 		$wikiDbr = $lb->getConnection( $lb::DB_REPLICA );
 
 		$property_value = $dbr->addQuotes( $this->filter->escapedProperty() );

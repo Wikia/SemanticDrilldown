@@ -124,7 +124,7 @@ class QueryPage extends \QueryPage {
 		if ( !$this->query ) {
 			return 'select null as sortkey where 0 = 1';
 		}
-		$dbr = smwfGetStore()->getConnection( 'mw.db' );
+		$dbr = smwfGetStore()->getConnection( DB_REPLICA );
 		$smwIDs = $dbr->tableName( Utils::getIDsTableName() );
 		$smwCategoryInstances = $dbr->tableName( Utils::getCategoryInstancesTableName() );
 		$cat_ns = NS_CATEGORY;
@@ -331,7 +331,7 @@ class QueryPage extends \QueryPage {
 	}
 
 	protected function getRecacheDB() {
-		return smwfGetStore()->getConnection( 'mw.db' );
+		return smwfGetStore()->getConnection( DB_REPLICA );
 	}
 
 
