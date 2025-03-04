@@ -119,9 +119,9 @@ class GetApplicableFilters {
 	 * the "results" (values) for this filter has been created.
 	 */
 	private function getFilterLine( $filterName, $isApplied, $isNormalFilter, $resultsLine, Filter $filter ): string {
-		global $wgScriptPath;
+		global $wgExtensionAssetsPath;
 		global $wgSdgDisableFilterCollapsible;
-		$sdSkinsPath = "$wgScriptPath/extensions/SemanticDrilldown/skins";
+		$sdSkinsPath = "$wgExtensionAssetsPath/SemanticDrilldown/skins";
 
 		if ( $filter->int() !== null ) {
 			$filterName = wfMessage( $filter->int() )->text();

@@ -21,8 +21,8 @@ class GetAppliedFilters {
 	}
 
 	public function __invoke(): array {
-		global $wgScriptPath;
-		$sdSkinsPath = $wgScriptPath . '/extensions/SemanticDrilldown/skins';
+		global $wgExtensionAssetsPath;
+		$sdSkinsPath = $wgExtensionAssetsPath . '/SemanticDrilldown/skins';
 
 		$remainingHtml = '';
 		$subcategory_text = wfMessage( 'sd_browsedata_subcategory' )->text();
