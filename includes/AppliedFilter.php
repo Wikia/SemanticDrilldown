@@ -301,7 +301,7 @@ class AppliedFilter {
 		if ( $this->filter->propertyType() === 'page' ) {
 			$sql .= ",p.o_id AS o_id";
 		}
-		$sql .= "FROM $property_table_name p
+		$sql .= " FROM $property_table_name p
 				JOIN $smw_ids p_ids ON p.p_id = p_ids.smw_id\n";
 		if ( $this->filter->propertyType() === 'page' ) {
 
