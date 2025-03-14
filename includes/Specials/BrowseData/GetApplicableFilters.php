@@ -484,7 +484,6 @@ END;
 			}
 			$possibleFilterValues = new PossibleFilterValues( $possibleValues );
 		}
-		$this->db->dropFilterValuesTempTable();
 
 		$additionalPossibleValues = [];
 		// Now get values for 'Other' and 'None', as well
@@ -509,7 +508,7 @@ END;
 				}
 			}
 		}
-
+		$this->db->dropFilterValuesTempTable();
 		return $possibleFilterValues->merge( $additionalPossibleValues );
 	}
 
