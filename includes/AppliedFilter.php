@@ -319,6 +319,7 @@ class AppliedFilter {
 			*/
 				$sql .= <<<SQL
 					JOIN $smw_ids o_ids ON p.o_id = o_ids.smw_id
+					
 					SQL;
 			}
 		$sql .= <<<SQL
