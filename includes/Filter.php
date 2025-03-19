@@ -335,7 +335,9 @@ END;
 			$possible_values[] = new PossibleFilterValue(
 				$value_string,
 				$row['count'],
-				htmlspecialchars_decode( $o_ids_to_displaytitle[$row['o_id']] ?? '' )
+				isset( $row['o_id'] ) && isset( $o_ids_to_displaytitle[$row['o_id']] )
+					? htmlspecialchars_decode( $o_ids_to_displaytitle[$row['o_id']] )
+					: ''
 			);
 		}
 
