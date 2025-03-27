@@ -107,9 +107,7 @@ class Filter {
 		$possible_dates = [];
 		$property_value = $this->escapedProperty();
 		$date_field = PropertyTypeDbInfo::dateField( $this->propertyType() );
-		$dbw = MediaWikiServices::getInstance()
-				->getDBLoadBalancer()
-				->getMaintenanceConnectionRef( DB_PRIMARY );
+		$dbw = Services::getSmwMaintenanceDb( DB_PRIMARY );
 		list( $yearValue, $monthValue, $dayValue ) = SqlProvider::getDateFunctions( $date_field );
 		$fields = "$yearValue, $monthValue, $dayValue";
 		$datesTable = $dbw->tableName( PropertyTypeDbInfo::tableName( $this->propertyType() ) );
@@ -237,26 +235,21 @@ END;
 	public function getAllValues(): PossibleFilterValues {
 		$possible_values = [];
 		$property_value = $this->escapedProperty();
-		$dbw = MediaWikiServices::getInstance()
-				->getDBLoadBalancer()
-				->getMaintenanceConnectionRef( DB_PRIMARY );
+		$dbw = Services::getSmwMaintenanceDb( DB_PRIMARY );
+
 		$property_table_name = $dbw->tableName( PropertyTypeDbInfo::tableName( $this->propertyType() ) );
-		$revision_table_name = $dbw->tableName( 'revision' );
-		$page_props_table_name = $dbw->tableName( 'page_props' );
 		$value_field = PropertyTypeDbInfo::valueField( $this->propertyType() );
-		$displaytitle = $this->propertyType === 'page' ? 'displaytitle.pp_value' : 'null';
+		$displaytitle = $this->propertyType === 'page' ? 'o_ids.smw_rev' : 'null';
 		$smw_ids = $dbw->tableName( Utils::getIDsTableName() );
 		$prop_ns = SMW_NS_PROPERTY;
 		$sql = <<<END
-	SELECT $value_field as value, $displaytitle as displayTitle, count(DISTINCT sdv.id) as count 
+	SELECT $value_field as value, $displaytitle as rev_id, count(DISTINCT sdv.id) as count
 	FROM semantic_drilldown_values sdv
 	JOIN $property_table_name p ON sdv.id = p.s_id
 END;
 		if ( $this->propertyType === 'page' ) {
 			$sql .= <<<END
 	JOIN $smw_ids o_ids ON p.o_id = o_ids.smw_id
-	LEFT JOIN $revision_table_name ON $revision_table_name.rev_id = o_ids.smw_rev
-	LEFT JOIN $page_props_table_name displaytitle ON $revision_table_name.rev_page = displaytitle.pp_page AND displaytitle.pp_propname = 'displaytitle'
 END;
 		}
 		$sql .= <<<END
@@ -268,6 +261,8 @@ END;
 
 END;
 		$res = $dbw->query( $sql );
+		$rows = [];
+		$revIds = [];
 		while ( $row = $res->fetchRow() ) {
 			$value_string = str_replace( '_', ' ', $row['value'] );
 			// We check this here, and not in the SQL, because
@@ -275,16 +270,37 @@ END;
 			if ( $value_string === '' ) {
 				continue;
 			}
-			$possible_values[] = new PossibleFilterValue( $value_string, $row['count'], htmlspecialchars_decode( $row['displayTitle'] ?? '' ) );
+			$rows[] = $row;
+			$revIds[] = $row['rev_id'];
+		}
+		if ( $this->propertyType !== 'page' ) {
+			foreach ( $rows as $row ) {
+				$possible_values[] = new PossibleFilterValue( $value_string, $row['count'], htmlspecialchars_decode('' ) );
+			}
+			return new PossibleFilterValues( $possible_values );
 		}
 
+		$wikiDbr = MediaWikiServices::getInstance()->getDBLoadBalancer()->getConnection( DB_REPLICA );
+		$pageProps = $wikiDbr->newSelectQueryBuilder()
+			->select( [ 'displaytitle.pp_value as displayTitle', 'rev_id' ] )
+			->from( 'revision' )
+			->join( 'page_props', 'displaytitle', "revision.rev_page = displaytitle.pp_page AND displaytitle.pp_propname = 'displaytitle'" )
+			->where( [ 'rev_id' => $revIds ] )
+			->caller( __METHOD__ )
+			->fetchResultSet();
+		$displayTitles = [];
+		foreach ( $pageProps as $prop ) {
+			$displayTitles[$prop['rev_id']] = $prop['rev_id'];
+		}
+
+		foreach ( $rows as $row ) {
+			$possible_values[] = new PossibleFilterValue( $value_string, $row['count'], htmlspecialchars_decode($displayTitles[$row['rev_id']] ?? '' ) );
+		}
 		return new PossibleFilterValues( $possible_values );
 	}
 
 	private function getTimePeriod() {
-		$dbw = MediaWikiServices::getInstance()
-				->getDBLoadBalancer()
-				->getMaintenanceConnectionRef( DB_PRIMARY );
+		$dbw = Services::getSmwMaintenanceDb( DB_PRIMARY );
 		$property_value = $this->escapedProperty();
 		$date_field = PropertyTypeDbInfo::dateField( $this->propertyType() );
 		$datesTable = $dbw->tableName( PropertyTypeDbInfo::tableName( $this->propertyType() ) );

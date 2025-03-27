@@ -8,6 +8,7 @@ use RequestContext;
 use SD\DbService;
 use SD\Parameters\DisplayParameters;
 use SD\Parameters\Parameters;
+use SD\Services;
 use SD\Sql\PropertyTypeDbInfo;
 use SD\Sql\SqlProvider;
 use SD\Utils;
@@ -267,6 +268,10 @@ class QueryPage extends \QueryPage {
 			$query[ 'conds' ][] = "$property_field = " . new Subquery( $sql );
 		}
 		return $query;
+	}
+
+	protected function getRecacheDB() {
+		return Services::getSmwDb( DB_REPLICA, 'vslow' );
 	}
 
 	protected function getSQL(): ?string {
