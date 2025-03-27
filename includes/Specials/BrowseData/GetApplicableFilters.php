@@ -207,16 +207,16 @@ END;
 			$additional_or_values[] = new PossibleFilterValue( '_other' );
 		}
 		$additional_or_values[] = new PossibleFilterValue( '_none' );
-		$or_values = $or_values->merge( $additional_or_values );
+		$or_values = is_array( $or_values ) ? array_merge( $or_values, $additional_or_values ) : $or_values->merge( $additional_or_values );
 
 		$i = 0;
 		foreach ( $or_values as $or_value ) {
-			$value = $or_value->value();
+			$value = is_string( $or_value ) ? $or_value : $or_value->value();
 			if ( $i++ > 0 ) {
 				$results_line .= " · ";
 			}
 			$filter_text = Utils::escapeString( Utils::getNiceFilterValue( $af->filter->propertyType(),
-				$or_value->displayValue() ) );
+				is_string( $or_value ) ? $or_value : $or_value->displayValue() ) );
 			$applied_filters = $this->query->appliedFilters();
 			foreach ( $applied_filters as $af2 ) {
 				if ( $af->filter->name() == $af2->filter->name() ) {
