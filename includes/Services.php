@@ -17,6 +17,7 @@ use SpecialPage;
 use Title;
 use WebRequest;
 use Wikimedia\Rdbms\DBConnRef;
+use Wikimedia\Rdbms\ILoadBalancer;
 
 /**
  * The service locator of the SemanticDrilldown extension.
@@ -61,8 +62,31 @@ class Services {
 			$s->getNewQueryPage(), $s->getBuildFilters() );
 	}
 
-	private function getDbService(): DbService {
-		return new DbService( $this->getPrimaryDbConnectionRef(), $this->getReplicaDbConnectionRef() );
+	public static function getDbService(): DbService {
+		$services = MediaWikiServices::getInstance();
+		$config = $services->getMainConfig();
+
+		return new DbService( self::getSmwLb(), $services->getDBLoadBalancer(), $config->get( 'SMWDbName' ) );
+	}
+
+	public static function getSmwDb( int $type, $groups = [] ): DBConnRef {
+		$services = MediaWikiServices::getInstance();
+		$config = $services->getMainConfig();
+		$smwLb = $services->getDBLoadBalancerFactory()->getExternalLB( $config->get( 'SMWDB' ) );
+
+		return $smwLb->getConnectionRef( $type, $groups, $config->get( 'SMWDbName' ) );
+	}
+
+	public static function getSmwMaintenanceDb( int $type ): DBConnRef {
+		$services = MediaWikiServices::getInstance();
+		$config = $services->getMainConfig();
+		return $services->getDBLoadBalancerFactory()->getExternalLB( $config->get( 'SMWDB' ) )->getMaintenanceConnectionRef( DB_PRIMARY, [], $config->get( 'SMWDbName' ) );
+	}
+
+	private static function getSmwLb(): ILoadBalancer {
+		$services = MediaWikiServices::getInstance();
+		$config = $services->getMainConfig();
+		return $services->getDBLoadBalancerFactory()->getExternalLB( $config->get( 'SMWDB' ) );
 	}
 
 	private function getBuildFilters(): BuildFilters {
@@ -126,13 +150,4 @@ class Services {
 			}
 		};
 	}
-
-	private function getPrimaryDbConnectionRef(): DBConnRef {
-		return $this->services->getDBLoadBalancer()->getConnectionRef( DB_PRIMARY );
-	}
-
-	private function getReplicaDbConnectionRef(): DBConnRef {
-		return $this->services->getDBLoadBalancer()->getConnectionRef( DB_REPLICA );
-	}
-
 }

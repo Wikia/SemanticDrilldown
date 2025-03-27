@@ -5,16 +5,12 @@ namespace SD;
 use SD\Sql\PropertyTypeDbInfo;
 use SD\Sql\SqlProvider;
 use Wikimedia\Rdbms\DBConnRef;
+use Wikimedia\Rdbms\ILoadBalancer;
 use Wikimedia\Rdbms\IResultWrapper;
 
 class DbService {
 
-	private DBConnRef $dbw;
-	private DBConnRef $dbr;
-
-	public function __construct( ?DBConnRef $dbw, ?DBConnRef $dbr ) {
-		$this->dbw = $dbw;
-		$this->dbr = $dbr;
+	public function __construct( private ILoadBalancer $smwLb, private ILoadBalancer $wikiLb, private string $smwDbName ) {
 	}
 
 	/**
@@ -24,7 +20,7 @@ class DbService {
 	 * @return bool|IResultWrapper
 	 */
 	public function query( string $sql ) {
-		return $this->dbr->query( $sql );
+		return $this->getSmwDb( DB_PRIMARY )->query( $sql );
 	}
 
 	/**
@@ -33,7 +29,7 @@ class DbService {
 	 * all remaining filters
 	 */
 	public function createTempTable( $category, $subcategory, $subcategories, $applied_filters ) {
-		$temporaryTableManager = new TemporaryTableManager( $this->dbw );
+		$temporaryTableManager = new TemporaryTableManager( $this->getSmwDb( DB_PRIMARY ) );
 
 		$sql0 = "DROP TABLE IF EXISTS semantic_drilldown_values;";
 		$temporaryTableManager->queryWithAutoCommit( $sql0, __METHOD__ );
@@ -57,9 +53,10 @@ class DbService {
 	 * and for getting the set of 'None' values.
 	 */
 	public function createFilterValuesTempTable( $propertyType, $escaped_property ) {
-		$smw_ids = $this->dbr->tableName( Utils::getIDsTableName() );
+		$smwDbr = $this->getSmwDb( DB_REPLICA );
+		$smw_ids = $smwDbr->tableName( Utils::getIDsTableName() );
 
-		$valuesTable = $this->dbr->tableName( PropertyTypeDbInfo::tableName( $propertyType ) );
+		$valuesTable = $smwDbr->tableName( PropertyTypeDbInfo::tableName( $propertyType ) );
 		$value_field = PropertyTypeDbInfo::valueField( $propertyType );
 
 		$query_property = $escaped_property;
@@ -76,7 +73,7 @@ END;
 		}
 		$sql .= "	WHERE p_ids.smw_title = '$query_property'";
 
-		$temporaryTableManager = new TemporaryTableManager( $this->dbw );
+		$temporaryTableManager = new TemporaryTableManager( $this->getSmwDb( DB_PRIMARY ) );
 		$temporaryTableManager->queryWithAutoCommit( $sql, __METHOD__ );
 	}
 
@@ -88,7 +85,7 @@ END;
 		// not supported on all RDBMS's.
 		$sql = "DROP TABLE semantic_drilldown_filter_values";
 
-		$temporaryTableManager = new TemporaryTableManager( $this->dbw );
+		$temporaryTableManager = new TemporaryTableManager( $this->getSmwDb( DB_PRIMARY ) );
 		$temporaryTableManager->queryWithAutoCommit( $sql, __METHOD__ );
 	}
 
@@ -121,7 +118,7 @@ END;
 			$conds['page_namespace'] = NS_CATEGORY;
 		}
 
-		$res = $this->dbr->select(
+		$res = $this->wikiLb->getConnection( DB_REPLICA )->select(
 			[ 'categorylinks', 'page' ],
 			[ 'page_title', 'page_namespace' ],
 			$conds,
@@ -182,7 +179,7 @@ END;
 	private function getOnlyExplicitlyShownCategories() {
 		$shown_cats = [];
 
-		$res = $this->dbr->select(
+		$res = $this->wikiLb->getConnection( DB_REPLICA )->select(
 			[ 'p' => 'page', 'pp' => 'page_props' ],
 			'p.page_title',
 			[
@@ -212,7 +209,8 @@ END;
 	 */
 	public function getTopLevelCategories() {
 		$categories = [];
-		$res = $this->dbr->select(
+		$dbr = $this->wikiLb->getConnection( DB_REPLICA );
+		$res = $dbr->select(
 			[ 'page', 'categorylinks' ],
 			'page_title',
 			[
@@ -236,7 +234,7 @@ END;
 
 		// get 'hide' and 'show' categories
 		$hidden_cats = $shown_cats = [];
-		$res2 = $this->dbr->select(
+		$res2 = $dbr->select(
 			[ 'page', 'page_props' ],
 			[ 'page_title', 'pp_propname' ],
 			[
@@ -277,4 +275,7 @@ END;
 		return $categories;
 	}
 
+	private function getSmwDb( int $type ): DBConnRef {
+		return $this->smwLb->getConnectionRef( $type, [], $this->smwDbName );
+	}
 }
