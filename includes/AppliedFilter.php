@@ -374,11 +374,16 @@ class AppliedFilter {
 				$value_string = str_replace( '_', ' ', $row['value'] );
 			}
 
+			$displayTitle = null;
+			if ( array_key_exists( 'o_id', $row ) ) {
+				$displayTitle = htmlspecialchars_decode( $o_ids_to_displaytitle[$row['o_id']] ?? '' );
+			}
+
 			$possible_values[] = new PossibleFilterValue(
 				$value_string,
 				null,
 				// Fandom change - fetch displayTitle from the array instead
-				htmlspecialchars_decode( $o_ids_to_displaytitle[$row['o_id']] ?? '' )
+				$displayTitle
 			);
 		}
 		return new PossibleFilterValues( $possible_values );
