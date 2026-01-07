@@ -6,7 +6,7 @@ use MediaWiki\Context\RequestContext;
 use MediaWiki\MediaWikiServices;
 use SD\Sql\PropertyTypeDbInfo;
 use SD\Sql\SqlProvider;
-use SMWStore;
+use SMW\Store;
 
 /**
  * Defines a class, AppliedFilter, that adds a value or a value range
@@ -64,7 +64,7 @@ class AppliedFilter {
 	 * Fandom change - start
 	 * SMWStore is required to access the SMW DB in an external cluster
 	 */
-	private SMWStore $store;
+	private Store $store;
 
 	public function __construct() {
 		$this->store = smwfGetStore();
@@ -319,7 +319,7 @@ class AppliedFilter {
 			*/
 				$sql .= <<<SQL
 					JOIN $smw_ids o_ids ON p.o_id = o_ids.smw_id
-					
+
 					SQL;
 			}
 		$sql .= <<<SQL

@@ -42,7 +42,7 @@ class DbService {
 	public function createTempTable( $category, $subcategory, $subcategories, $applied_filters ) {
 		$temporaryTableManager = new TemporaryTableManager( $this->dbrQueryEngine );
 
-		$tableName = $this->dbr->tableName( "semantic_drilldown_values" );
+		$tableName = $this->dbrQueryEngine->tableName( "semantic_drilldown_values" );
 		// Fandom change - no need to drop temporary tables
 		// $sql0 = "DROP TABLE IF EXISTS $tableName;";
 		// $temporaryTableManager->queryWithAutoCommit( $sql0, __METHOD__ );
@@ -75,7 +75,7 @@ class DbService {
 
 		$query_property = $escaped_property;
 
-		$tableName = $this->dbr->tableName( "semantic_drilldown_filter_values" );
+		$tableName = $this->dbrQueryEngine->tableName( "semantic_drilldown_filter_values" );
 		$sql = <<<END
  	CREATE TEMPORARY TABLE $tableName
 	AS SELECT s_id AS id, $value_field AS value
@@ -98,7 +98,7 @@ END;
 	public function dropFilterValuesTempTable() {
 		// DROP TEMPORARY TABLE would be marginally safer, but it's
 		// not supported on all RDBMS's.
-		$tableName = $this->dbr->tableName( "semantic_drilldown_filter_values" );
+		$tableName = $this->smwDbr->tableName( "semantic_drilldown_filter_values" );
 		$sql = "DROP TABLE $tableName";
 
 		$temporaryTableManager = new TemporaryTableManager( $this->smwDbr );
