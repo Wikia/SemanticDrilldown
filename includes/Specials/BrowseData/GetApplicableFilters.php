@@ -119,9 +119,9 @@ class GetApplicableFilters {
 	 * the "results" (values) for this filter has been created.
 	 */
 	private function getFilterLine( $filterName, $isApplied, $isNormalFilter, $resultsLine, Filter $filter ): string {
-		global $wgScriptPath;
-		global $sdgDisableFilterCollapsible;
-		$sdSkinsPath = "$wgScriptPath/extensions/SemanticDrilldown/skins";
+		global $wgExtensionAssetsPath;
+		global $wgSdgDisableFilterCollapsible;
+		$sdSkinsPath = "$wgExtensionAssetsPath/SemanticDrilldown/skins";
 
 		if ( $filter->int() !== null ) {
 			$filterName = wfMessage( $filter->int() )->text();
@@ -135,7 +135,7 @@ class GetApplicableFilters {
 			$additionalClasses .= ' is-normal-filter';
 		}
 
-		if ( $sdgDisableFilterCollapsible ) {
+		if ( $wgSdgDisableFilterCollapsible ) {
 			$text  = '<div class="drilldown-filter' . $additionalClasses . '">';
 			$text .= "	<div class='drilldown-filter-label'>$filterName</div>";
 			$text .= '	<div class="drilldown-filter-values">' . $resultsLine . '</div>';
@@ -207,16 +207,16 @@ END;
 			$additional_or_values[] = new PossibleFilterValue( '_other' );
 		}
 		$additional_or_values[] = new PossibleFilterValue( '_none' );
-		$or_values = $or_values->merge( $additional_or_values );
+		$or_values = is_array( $or_values ) ? array_merge( $or_values, $additional_or_values ) : $or_values->merge( $additional_or_values );
 
 		$i = 0;
 		foreach ( $or_values as $or_value ) {
-			$value = $or_value->value();
+			$value = is_string( $or_value ) ? $or_value : $or_value->value();
 			if ( $i++ > 0 ) {
 				$results_line .= " · ";
 			}
 			$filter_text = Utils::escapeString( Utils::getNiceFilterValue( $af->filter->propertyType(),
-				$or_value->displayValue() ) );
+				is_string( $or_value ) ? $or_value : $or_value->displayValue() ) );
 			$applied_filters = $this->query->appliedFilters();
 			foreach ( $applied_filters as $af2 ) {
 				if ( $af->filter->name() == $af2->filter->name() ) {
@@ -484,7 +484,6 @@ END;
 			}
 			$possibleFilterValues = new PossibleFilterValues( $possibleValues );
 		}
-		$this->db->dropFilterValuesTempTable();
 
 		$additionalPossibleValues = [];
 		// Now get values for 'Other' and 'None', as well
@@ -509,7 +508,7 @@ END;
 				}
 			}
 		}
-
+		$this->db->dropFilterValuesTempTable();
 		return $possibleFilterValues->merge( $additionalPossibleValues );
 	}
 

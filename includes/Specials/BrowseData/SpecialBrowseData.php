@@ -41,8 +41,8 @@ class SpecialBrowseData extends IncludableSpecialPage {
 	}
 
 	public function execute( $query ): void {
-		global $wgScriptPath, $sdgNumResultsPerPage;
-		$sdSkinsPath = "$wgScriptPath/extensions/SemanticDrilldown/skins";
+		global $wgExtensionAssetsPath, $sdgNumResultsPerPage;
+		$sdSkinsPath = "$wgExtensionAssetsPath/SemanticDrilldown/skins";
 
 		$out = $this->getOutput();
 		$request = $this->getRequest();

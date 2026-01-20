@@ -4,6 +4,7 @@ namespace SD;
 
 use SD\Sql\PropertyTypeDbInfo;
 use SD\Sql\SqlProvider;
+use SMW\MediaWiki\Connection\Database;
 use Wikimedia\Rdbms\DBConnRef;
 use Wikimedia\Rdbms\IResultWrapper;
 
@@ -11,10 +12,16 @@ class DbService {
 
 	private ?DBConnRef $dbw;
 	private ?DBConnRef $dbr;
+	private ?DBConnRef $smwDbr;
+	private Database $dbrQueryEngine;
 
 	public function __construct( ?DBConnRef $dbw, ?DBConnRef $dbr ) {
 		$this->dbw = $dbw;
 		$this->dbr = $dbr;
+		// Fandom change - obtain a connection to the external SMW cluster
+		$this->smwDbr = smwfGetStore()->getConnection( DB_REPLICA );
+		// PLATFORM-9138
+		$this->dbrQueryEngine = smwfGetStore()->getConnection( 'mw.db.queryengine' );
 	}
 
 	/**
@@ -24,7 +31,7 @@ class DbService {
 	 * @return bool|IResultWrapper
 	 */
 	public function query( string $sql ) {
-		return $this->dbr->query( $sql );
+		return $this->dbrQueryEngine->query( $sql );
 	}
 
 	/**
@@ -33,17 +40,20 @@ class DbService {
 	 * all remaining filters
 	 */
 	public function createTempTable( $category, $subcategory, $subcategories, $applied_filters ) {
-		$temporaryTableManager = new TemporaryTableManager( $this->dbw );
+		$temporaryTableManager = new TemporaryTableManager( $this->dbrQueryEngine );
 
-		$tableName = $this->dbr->tableName( "semantic_drilldown_values" );
-		$sql0 = "DROP TABLE IF EXISTS $tableName;";
-		$temporaryTableManager->queryWithAutoCommit( $sql0, __METHOD__ );
+		$tableName = $this->dbrQueryEngine->tableName( "semantic_drilldown_values" );
+		// Fandom change - no need to drop temporary tables
+		// $sql0 = "DROP TABLE IF EXISTS $tableName;";
+		// $temporaryTableManager->queryWithAutoCommit( $sql0, __METHOD__ );
 
-		$sql1 = "CREATE TEMPORARY TABLE $tableName ( id INT NOT NULL )";
+		// Fandom change - add extra index to the temporary table
+		$sql1 = "CREATE TEMPORARY TABLE $tableName ( id INT NOT NULL, INDEX id_index ( id ) )";
 		$temporaryTableManager->queryWithAutoCommit( $sql1, __METHOD__ );
 
-		$sql2 = "CREATE INDEX id_index ON $tableName ( id )";
-		$temporaryTableManager->queryWithAutoCommit( $sql2, __METHOD__ );
+		// Fandom change - index is created with the query above
+		// $sql2 = "CREATE INDEX id_index ON $tableName ( id )";
+		// $temporaryTableManager->queryWithAutoCommit( $sql2, __METHOD__ );
 
 		$sql3 = "INSERT INTO $tableName SELECT ids.smw_id AS id\n";
 		$sql3 .= SqlProvider::getSQLFromClause( $category, $subcategory, $subcategories, $applied_filters );
@@ -58,14 +68,14 @@ class DbService {
 	 * and for getting the set of 'None' values.
 	 */
 	public function createFilterValuesTempTable( $propertyType, $escaped_property ) {
-		$smw_ids = $this->dbr->tableName( Utils::getIDsTableName() );
+		$smw_ids = $this->smwDbr->tableName( Utils::getIDsTableName() );
 
-		$valuesTable = $this->dbr->tableName( PropertyTypeDbInfo::tableName( $propertyType ) );
+		$valuesTable = $this->smwDbr->tableName( PropertyTypeDbInfo::tableName( $propertyType ) );
 		$value_field = PropertyTypeDbInfo::valueField( $propertyType );
 
 		$query_property = $escaped_property;
 
-		$tableName = $this->dbr->tableName( "semantic_drilldown_filter_values" );
+		$tableName = $this->dbrQueryEngine->tableName( "semantic_drilldown_filter_values" );
 		$sql = <<<END
  	CREATE TEMPORARY TABLE $tableName
 	AS SELECT s_id AS id, $value_field AS value
@@ -78,7 +88,7 @@ END;
 		}
 		$sql .= "	WHERE p_ids.smw_title = '$query_property'";
 
-		$temporaryTableManager = new TemporaryTableManager( $this->dbw );
+		$temporaryTableManager = new TemporaryTableManager( $this->dbrQueryEngine );
 		$temporaryTableManager->queryWithAutoCommit( $sql, __METHOD__ );
 	}
 
@@ -88,10 +98,10 @@ END;
 	public function dropFilterValuesTempTable() {
 		// DROP TEMPORARY TABLE would be marginally safer, but it's
 		// not supported on all RDBMS's.
-		$tableName = $this->dbr->tableName( "semantic_drilldown_filter_values" );
+		$tableName = $this->smwDbr->tableName( "semantic_drilldown_filter_values" );
 		$sql = "DROP TABLE $tableName";
 
-		$temporaryTableManager = new TemporaryTableManager( $this->dbw );
+		$temporaryTableManager = new TemporaryTableManager( $this->smwDbr );
 		$temporaryTableManager->queryWithAutoCommit( $sql, __METHOD__ );
 	}
 
@@ -108,7 +118,7 @@ END;
 		} else {
 			$sql .= SqlProvider::getSQLFromClauseForCategory( $subcategory, $subcategories );
 		}
-		$res = $this->dbw->query( $sql );
+		$res = $this->dbrQueryEngine->query( $sql );
 		$row = $res->fetchRow();
 		return $row[0];
 	}
