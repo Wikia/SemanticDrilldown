@@ -252,8 +252,6 @@ END;
 			->getDBLoadBalancer()
 			->getMaintenanceConnectionRef( DB_REPLICA );
 		$property_table_name = $dbw->tableName( PropertyTypeDbInfo::tableName( $this->propertyType() ) );
-		$revision_table_name = $wikiDbr->tableName( 'revision' );
-		$page_props_table_name = $wikiDbr->tableName( 'page_props' );
 		$value_field = PropertyTypeDbInfo::valueField( $this->propertyType() );
 		$displaytitle = $this->propertyType === 'page' ? 'displaytitle.pp_value' : 'null';
 		$smw_ids = $dbw->tableName( Utils::getIDsTableName() );
@@ -307,9 +305,9 @@ END;
 			$titlesRows = $wikiDbr->newSelectQueryBuilder()
 				->field( 'revision.rev_id', 'rev_id' )
 				->field('displaytitle.pp_value', 'displayTitle' )
-				->from( $revision_table_name )
+				->from( 'revision' )  // Fandom change for MW 1.43.2 compatibility
 				->leftJoin(
-					$page_props_table_name,
+					'page_props',  // Fandom change for MW 1.43.2 compatibility
 					'displaytitle',
 					[
 						'revision.rev_page = displaytitle.pp_page',

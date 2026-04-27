@@ -271,8 +271,6 @@ class AppliedFilter {
 
 		$property_value = $dbr->addQuotes( $this->filter->escapedProperty() );
 		$property_table_name = $dbr->tableName( PropertyTypeDbInfo::tableName( $this->filter->propertyType() ) );
-		$revision_table_name = $wikiDbr->tableName( 'revision' );
-		$page_props_table_name = $wikiDbr->tableName( 'page_props' );
 		$category = $dbr->addQuotes( $category );
 
 		if ( $this->filter->propertyType() != 'date' ) {
@@ -348,9 +346,9 @@ class AppliedFilter {
 			$titlesRows = $wikiDbr->newSelectQueryBuilder()
 				->field( 'revision.rev_id', 'rev_id' )
 				->field('displaytitle.pp_value', 'displayTitle' )
-				->from( $revision_table_name )
+				->from( 'revision' )  // Fandom change for MW 1.43.2 compatibility
 				->leftJoin(
-					$page_props_table_name,
+					'page_props',  // Fandom change for MW 1.43.2 compatibility
 					'displaytitle',
 					[
 						'revision.rev_page = displaytitle.pp_page',
